@@ -25,3 +25,15 @@ export interface ParsedProfile {
 export interface ParseProfileRequest {
   simcText: string;
 }
+
+export interface SimulationSettings {
+  iterations: number;
+  fightStyle: string;
+  desiredTargets?: number;
+  maxTime?: number;
+}
+
+export interface QuickSimRequest {
+  simcText: string;
+  settings?: Partial<SimulationSettings>;
+}

@@ -1,11 +1,11 @@
 # LocalCraft
 
-LocalCraft is a small, local web interface for SimulationCraft. This first increment implements profile parsing only; it does **not** produce simulated DPS yet.
+LocalCraft is a small, local web interface for SimulationCraft. It can parse a pasted profile and run a Docker-backed Quick Sim. Clean DPS and damage result cards are the next increment; the current Quick Sim exposes its raw `json2` result in an expandable details area.
 
 ## Prerequisites
 
 - Node.js 20 or newer
-- Docker Desktop (required by the upcoming SimulationCraft phase, not by profile parsing)
+- Docker Desktop, running locally (required for Quick Sim)
 
 ## Start
 
@@ -15,6 +15,8 @@ npm run dev
 ```
 
 Open `http://localhost:5173`, paste the text copied from the World of Warcraft SimulationCraft addon's `/simc` command, and select **Parse profile**.
+
+To run a Quick Sim, choose its settings and select **Run Quick Sim**. LocalCraft starts `simulationcraftorg/simc:latest` with a temporary mounted working directory and deletes that directory after the run. Override the image with `SIMC_DOCKER_IMAGE`.
 
 The API runs on `http://127.0.0.1:3001`; its health endpoint is `GET /api/health`.
 
@@ -30,9 +32,9 @@ The parser deliberately retains every item’s original SimC line as `rawDefinit
 
 Bag-item conventions vary by addon/export version. The initial parser recognizes the common commented slot-line form; other bag encodings will remain unlisted rather than being guessed or rewritten.
 
-## Next steps before a simulation
+## Next steps
 
-The remaining work is Docker-backed SimulationCraft execution, `json2` result parsing, Quick Sim UI, and gear comparison profilesets. The planned default image is `simulationcraftorg/simc:latest`, configurable later through `SIMC_DOCKER_IMAGE`.
+The remaining work is parsing `json2` into clean Quick Sim result cards and gear comparison profilesets.
 
 ## Checks
 
