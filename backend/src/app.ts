@@ -45,7 +45,7 @@ export function buildApp(engine: SimulationEngine = new DockerSimulationEngine()
       const baselineItem = profile.equippedGear.find((item) => item.slot === request.body.slot);
       if (!baselineItem) return reply.code(400).send({ error: "No equipped item was found in the selected slot." });
       const settings = normalizeSimulationSettings(request.body.settings);
-      const input = createGearCompareInput(request.body.simcText, request.body.slot, request.body.candidateItems, settings);
+      const input = createGearCompareInput(request.body.simcText, request.body.slot, request.body.candidateItems, settings, request.body.adjustments);
       const rawResult = await engine.run(input);
       return { settings, result: parseGearCompareResult(rawResult, baselineItem, request.body.candidateItems), rawResult };
     } catch (error) {

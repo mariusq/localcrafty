@@ -17,12 +17,19 @@ function parseGearLine(line: string): GearItem | undefined {
   const definition = match[2];
   const itemId = definition.match(/(?:^|,)id=(\d+)/i)?.[1];
   const itemLevel = definition.match(/(?:^|,)ilevel=(\d+)/i)?.[1];
+  const enchantId = definition.match(/(?:^|,)(?:enchant_id|enchant)=(\d+)/i)?.[1];
+  const gemIds = definition.match(/(?:^|,)gem_id=([0-9/]+)/i)?.[1]
+    ?.split("/").map(Number).filter((id) => id > 0);
   const name = definition.split(",")[0].replace(/_/g, " ").trim();
+  const isTwoHanded = /(?:^|,)\s*(?:weapon|inventory_type)=[^,]*(?:2h|two[_ -]?hand)/i.test(definition);
 
   return {
     slot: slot as EquipmentSlot,
     ...(itemId ? { itemId: Number(itemId) } : {}),
     ...(itemLevel ? { itemLevel: Number(itemLevel) } : {}),
+    ...(enchantId ? { enchantId: Number(enchantId) } : {}),
+    ...(gemIds?.length ? { gemIds } : {}),
+    ...(isTwoHanded ? { isTwoHanded: true } : {}),
     ...(name ? { name } : {}),
     rawDefinition: line.trim(),
   };

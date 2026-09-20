@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { EQUIPMENT_SLOTS, SIMULATION_FIGHT_STYLES, type EquipmentSlot, type GearCompareResult, type GearItem, type ParsedProfile, type QuickSimResult, type SimulationSettings } from "@localcraft/shared";
+import { EQUIPMENT_SLOTS, SIMULATION_FIGHT_STYLES, type EquipmentSlot, type GearCompareAdjustments, type GearCompareResult, type GearItem, type ParsedProfile, type QuickSimResult, type SimulationSettings } from "@localcraft/shared";
 
 const profileStorageKey = "localcraft.simc-profile";
 const labels: Record<string, string> = {
@@ -11,6 +11,11 @@ const labels: Record<string, string> = {
 const title = (value: string) => labels[value] ?? value.replace(/_/g, " ").replace(/\b\w/g, (letter) => letter.toUpperCase());
 const itemName = (item: GearItem) => item.name ?? `Item ${item.itemId ?? "unknown"}`;
 const formatNumber = new Intl.NumberFormat("en-US", { maximumFractionDigits: 0 });
+const combinedSlotGroups: Array<{ label: string; slots: EquipmentSlot[] }> = [
+  ...EQUIPMENT_SLOTS.filter((slot) => !["finger1", "finger2", "trinket1", "trinket2"].includes(slot)).map((slot) => ({ label: title(slot), slots: [slot] })),
+  { label: "Finger", slots: ["finger1", "finger2"] },
+  { label: "Trinket", slots: ["trinket1", "trinket2"] },
+];
 
 export default function App() {
   const [simcText, setSimcText] = useState(() => localStorage.getItem(profileStorageKey) ?? "");
@@ -25,9 +30,12 @@ export default function App() {
   const [activeView, setActiveView] = useState<"quick" | "gear">("quick");
   const [compareSlot, setCompareSlot] = useState<EquipmentSlot>();
   const [selectedCandidates, setSelectedCandidates] = useState<GearItem[]>([]);
+  const [selectedMainHandsAreTwoHanded, setSelectedMainHandsAreTwoHanded] = useState(false);
   const [comparing, setComparing] = useState(false);
   const [compareError, setCompareError] = useState<string>();
   const [gearCompareResult, setGearCompareResult] = useState<GearCompareResult>();
+  const [enchantments, setEnchantments] = useState<Partial<Record<EquipmentSlot, string>>>({});
+  const [emptySocketGemId, setEmptySocketGemId] = useState("");
   const [settings, setSettings] = useState<SimulationSettings>({ iterations: 10_000, fightStyle: "Patchwerk", desiredTargets: 1, maxTime: 300 });
 
   useEffect(() => { localStorage.setItem(profileStorageKey, simcText); }, [simcText]);
@@ -59,7 +67,7 @@ export default function App() {
   }
 
   function selectSlot(slot: EquipmentSlot) {
-    setCompareSlot(slot); setSelectedCandidates([]); setGearCompareResult(undefined); setCompareError(undefined); setActiveView("gear");
+    setCompareSlot(slot); setSelectedCandidates([]); setSelectedMainHandsAreTwoHanded(false); setGearCompareResult(undefined); setCompareError(undefined); setActiveView("gear");
   }
 
   function toggleCandidate(item: GearItem) {
@@ -71,7 +79,11 @@ export default function App() {
     if (!compareSlot) return;
     setComparing(true); setCompareError(undefined); setGearCompareResult(undefined);
     try {
-      const response = await fetch("/api/sim/gear-compare", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ simcText, slot: compareSlot, candidateItems: selectedCandidates, settings }) });
+      const numericEnchants = Object.fromEntries(Object.entries(enchantments).filter(([, id]) => /^\d+$/.test(id ?? "")).map(([slot, id]) => [slot, Number(id)]));
+      const adjustments: GearCompareAdjustments = { ...(Object.keys(numericEnchants).length ? { enchantments: numericEnchants } : {}), ...( /^\d+$/.test(emptySocketGemId) ? { emptySocketGemId: Number(emptySocketGemId) } : {}) };
+      const candidateItems = compareSlot === "main_hand" && selectedMainHandsAreTwoHanded
+        ? selectedCandidates.map((item) => ({ ...item, isTwoHanded: true })) : selectedCandidates;
+      const response = await fetch("/api/sim/gear-compare", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ simcText, slot: compareSlot, candidateItems, settings, adjustments }) });
       const data = await response.json();
       if (!response.ok) throw new Error(data.error ?? "Could not run the comparison.");
       setGearCompareResult(data.result);
@@ -81,10 +93,14 @@ export default function App() {
 
   const equippedItem = compareSlot ? profile?.equippedGear.find((item) => item.slot === compareSlot) : undefined;
   const candidates = compareSlot ? profile?.bagItems.filter((item) => item.slot === compareSlot) ?? [] : [];
+  const availableSlots = profile ? EQUIPMENT_SLOTS.filter((slot) => profile.equippedGear.some((item) => item.slot === slot)) : [];
+  const alternativeCount = profile?.bagItems.length ?? 0;
+  const adjustmentSlots = availableSlots.filter((slot) => ["back", "chest", "wrist", "hands", "waist", "legs", "feet", "finger1", "finger2", "main_hand", "off_hand"].includes(slot));
+  const groupCandidates = (slots: EquipmentSlot[]) => profile?.bagItems.filter((item) => slots.includes(item.slot)) ?? [];
 
   return <main>
     <header><div className="brand">Local<span>Craft</span></div><nav><button className={activeView === "quick" ? "nav-active" : "nav-button"} onClick={() => setActiveView("quick")}>Quick Sim</button><button className={activeView === "gear" ? "nav-active" : "nav-button"} onClick={() => setActiveView("gear")}>Gear Compare</button></nav></header>
-    <section className="hero"><p className="eyebrow">LOCAL SIMULATIONCRAFT TOOL</p><h1>{activeView === "quick" ? "Run a quick simulation." : "Compare your gear."}</h1><p>{activeView === "quick" ? "Paste the output from the World of Warcraft SimulationCraft addon, choose your settings, and run SimulationCraft locally through Docker." : "Choose an equipped slot and test bag alternatives in one SimulationCraft profileset run."}</p></section>
+    <section className="hero"><p className="eyebrow">LOCAL SIMULATIONCRAFT TOOL</p><h1>{activeView === "quick" ? "Run a quick simulation." : "Compare your gear."}</h1><p>{activeView === "quick" ? "Paste the output from the World of Warcraft SimulationCraft addon, choose your settings, and run SimulationCraft locally through Docker." : "Review every equipped slot and its detected alternatives in one place. Select alternatives from a single slot to test them together."}</p></section>
     <section className="card input-card"><label htmlFor="profile">SimulationCraft profile</label><textarea id="profile" value={simcText} onChange={(event) => setSimcText(event.target.value)} placeholder="Paste /simc output here…" spellCheck={false} />
       <div className="actions"><span>{simcText.length ? `${simcText.length.toLocaleString()} characters saved locally` : "Your profile stays in this browser."}</span><button onClick={parseProfile} disabled={loading}>{loading ? "Parsing…" : "Parse profile"}</button></div>
       {error && <p className="error">{error}</p>}
@@ -99,8 +115,8 @@ export default function App() {
     </section>}
     {activeView === "gear" && <section className="card simulation-card"><div className="section-title"><div><p className="eyebrow">GEAR COMPARE</p><h2>{compareSlot ? `Compare ${title(compareSlot)}` : "Choose a gear slot"}</h2></div><span>Profileset run</span></div>
       <div className="settings-grid compare-settings"><label>Iterations<input type="number" min="1" value={settings.iterations} onChange={(event) => setSettings({ ...settings, iterations: Number(event.target.value) })} /></label><label>Simulation method<select value={settings.fightStyle} onChange={(event) => setSettings({ ...settings, fightStyle: event.target.value })}>{SIMULATION_FIGHT_STYLES.map((style) => <option key={style} value={style}>{title(style)}</option>)}</select></label><label>Targets<input type="number" min="1" value={settings.desiredTargets} onChange={(event) => setSettings({ ...settings, desiredTargets: Number(event.target.value) })} /></label><label>Max time (seconds)<input type="number" min="1" value={settings.maxTime} onChange={(event) => setSettings({ ...settings, maxTime: Number(event.target.value) })} /></label></div>
-      {!profile ? <p className="empty">Parse a SimulationCraft profile first to discover your equipped and bag gear.</p> : <><div className="slot-picker">{EQUIPMENT_SLOTS.map((slot) => <button key={slot} className={compareSlot === slot ? "slot-selected" : "slot-button"} disabled={!profile.equippedGear.some((item) => item.slot === slot)} onClick={() => selectSlot(slot)}>{title(slot)}</button>)}</div>
-      {compareSlot && <div className="compare-panel"><p><span className="muted">Current</span><strong>{equippedItem ? itemName(equippedItem) : "No equipped item found"}</strong></p>{candidates.length ? <div className="candidate-list">{candidates.map((item, index) => <label key={`${item.rawDefinition}-${index}`}><input type="checkbox" checked={selectedCandidates.some((entry) => entry.rawDefinition === item.rawDefinition)} onChange={() => toggleCandidate(item)} /><span><strong>{itemName(item)}</strong><small>{item.itemLevel && `Item level ${item.itemLevel}`}</small></span></label>)}</div> : <p className="empty">No alternative items were found for this slot.</p>}<div className="actions"><span>{selectedCandidates.length} candidate{selectedCandidates.length === 1 ? "" : "s"} selected</span><button disabled={!selectedCandidates.length || comparing} onClick={runGearCompare}>{comparing ? "Running comparison…" : "Run comparison"}</button></div></div>}
+      {!profile ? <p className="empty">Parse a SimulationCraft profile first to discover your equipped and bag gear.</p> : <><div className="gem-adjustment"><label>Fill empty sockets with gem ID<input inputMode="numeric" value={emptySocketGemId} placeholder="Optional gem ID" onChange={(event) => setEmptySocketGemId(event.target.value)} /></label><small>Only explicitly empty sockets are filled during this comparison.</small></div><div className="compare-overview"><span>{availableSlots.length} equipped slots</span><span>{alternativeCount} alternatives found</span><span>Scroll to review all gear</span></div><div className="gear-compare-board">{combinedSlotGroups.map((group) => { const currentItems = profile.equippedGear.filter((item) => group.slots.includes(item.slot)); const alternatives = groupCandidates(group.slots); const isCombined = group.slots.length > 1; const slot = group.slots[0]; const isActive = !isCombined && compareSlot === slot; if (!currentItems.length) return null; const canEnchant = !isCombined && adjustmentSlots.includes(slot); return <article className={`slot-compare-card${isActive ? " slot-compare-active" : ""}`} key={group.label}><div className="slot-compare-heading"><div><span>{group.label}</span>{currentItems.map((current) => <div className="current-item" key={current.slot}><input type="checkbox" checked readOnly /><span><strong>{itemName(current)}</strong><small>{title(current.slot)} · {current.itemLevel ? `Item level ${current.itemLevel}` : "Item level unavailable"}</small></span></div>)}</div><b>{alternatives.length} option{alternatives.length === 1 ? "" : "s"}</b></div>{canEnchant && <div className="slot-enchant"><label>Enchant ID<input inputMode="numeric" value={enchantments[slot] ?? ""} placeholder="Optional" onChange={(event) => setEnchantments({ ...enchantments, [slot]: event.target.value })} /></label>{currentItems[0].enchantId && <button type="button" className="copy-enchant" onClick={() => setEnchantments({ ...enchantments, [slot]: String(currentItems[0].enchantId) })}>Copy current ({currentItems[0].enchantId})</button>}</div>}{alternatives.length ? <div className="candidate-list">{alternatives.map((item, index) => <label key={`${item.rawDefinition}-${index}`}><input type="checkbox" disabled={isCombined} checked={isActive && selectedCandidates.some((entry) => entry.rawDefinition === item.rawDefinition)} onChange={() => { if (!isActive) selectSlot(slot); toggleCandidate(item); }} /><span><strong>{itemName(item)}</strong><small>{item.itemLevel ? `Item level ${item.itemLevel}` : "Item level unavailable"}{item.itemId && ` · ID ${item.itemId}`}{item.enchantId && ` · Enchant ${item.enchantId}`}{item.gemIds?.length && ` · Gems ${item.gemIds.join("/")}`}</small></span></label>)}</div> : <p className="empty compact-empty">No alternatives detected for this slot.</p>}{isCombined && <p className="empty compact-empty">Ring and trinket alternatives are pooled here. Selecting replacements will be available with multi-piece comparisons.</p>}</article>; })}</div>
+      <div className="compare-action-bar"><div><span className="muted">Ready to compare</span><strong>{compareSlot ? `${selectedCandidates.length} selected for ${title(compareSlot)}` : "Select alternatives from one slot"}</strong>{compareSlot === "main_hand" && selectedCandidates.length > 0 && <label><input type="checkbox" checked={selectedMainHandsAreTwoHanded} onChange={(event) => setSelectedMainHandsAreTwoHanded(event.target.checked)} /> Selected weapon{selectedCandidates.length === 1 ? " is" : "s are"} two-handed</label>}</div><button disabled={!selectedCandidates.length || comparing} onClick={runGearCompare}>{comparing ? "Running comparison…" : "Run comparison"}</button></div>
       {compareError && <p className="error">{compareError}</p>}{gearCompareResult && <div className="comparison-results"><article className="comparison-row baseline"><span>Current</span><strong>{itemName(gearCompareResult.baseline.item)}</strong><b>{formatNumber.format(gearCompareResult.baseline.dps)} DPS</b></article>{gearCompareResult.candidates.map((entry, index) => <article className="comparison-row" key={`${entry.item.rawDefinition}-${index}`}><span>Candidate</span><strong>{itemName(entry.item)}</strong><b>{formatNumber.format(entry.dps)} DPS <i className={entry.difference >= 0 ? "positive" : "negative"}>{entry.difference >= 0 ? "+" : ""}{formatNumber.format(entry.difference)} · {entry.percentageDifference >= 0 ? "+" : ""}{entry.percentageDifference.toFixed(2)}%</i></b></article>)}</div>}</>}</section>}
     {profile && <section className="results">
       <div className="card character"><p className="eyebrow">CHARACTER</p><h2>{profile.characterName ?? "Character not detected"}</h2><p>{[profile.specialization && title(profile.specialization), profile.characterClass && title(profile.characterClass)].filter(Boolean).join(" · ") || "Class and specialization not found"}</p>{profile.talents && <code>Talents: {profile.talents}</code>}</div>

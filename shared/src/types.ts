@@ -10,6 +10,10 @@ export interface GearItem {
   itemId?: number;
   name?: string;
   itemLevel?: number;
+  enchantId?: number;
+  gemIds?: number[];
+  /** Present when the SimC declaration explicitly identifies a two-handed weapon. */
+  isTwoHanded?: boolean;
   rawDefinition: string;
 }
 
@@ -70,6 +74,13 @@ export interface GearCompareRequest {
   slot: EquipmentSlot;
   candidateItems: GearItem[];
   settings?: Partial<SimulationSettings>;
+  adjustments?: GearCompareAdjustments;
+}
+
+/** Optional, simulation-only item changes. The pasted profile is never modified. */
+export interface GearCompareAdjustments {
+  enchantments?: Partial<Record<EquipmentSlot, number>>;
+  emptySocketGemId?: number;
 }
 
 export interface GearComparisonEntry {

@@ -17,6 +17,11 @@ test("keeps commented alternate gear as bag items", () => {
   assert.equal(profile.bagItems[0].name, "alternate helm");
 });
 
+test("identifies two-handed weapon declarations", () => {
+  const profile = parseSimcProfile("# main_hand=umbral_spire,id=258514,weapon=staff2h_3.6speed");
+  assert.equal(profile.bagItems[0].isTwoHanded, true);
+});
+
 test("uses the addon's preceding comment for compact item names and levels", () => {
   const profile = parseSimcProfile(`warlock=Test_Lock
 # Crown of Arcane Acuity (723)
