@@ -1,0 +1,8 @@
+node_modules/
+.pnpm-store/
+dist/
+.env
+coverage/
+
+# Local task instructions supplied outside the application source
+AGENT.md
