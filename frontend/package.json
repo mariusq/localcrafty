@@ -8,7 +8,7 @@
     "build": "tsc -b && vite build"
   },
   "dependencies": {
-    "@localcraft/shared": "workspace:*",
+    "@localcraft/shared": "file:../shared",
     "@vitejs/plugin-react": "^4.3.4",
     "vite": "^6.0.1",
     "react": "^19.0.0",
