@@ -25,3 +25,22 @@ test("quick sim sends generated SimC input to the simulation engine", async () =
   assert.equal(response.json().result.dps, 100);
   await app.close();
 });
+
+test("gear comparison sends one profileset run and returns differences", async () => {
+  let receivedInput = "";
+  const app = buildApp({ run: async (input) => {
+    receivedInput = input;
+    return { sim: { players: [
+      { collected_data: { dps: { mean: 100 } } },
+      { collected_data: { dps: { mean: 115 } } },
+    ] } };
+  } });
+  const response = await app.inject({ method: "POST", url: "/api/sim/gear-compare", payload: {
+    simcText: "mage=Khadgar\nhead=old,id=1",
+    slot: "head", candidateItems: [{ slot: "head", rawDefinition: "head=new,id=2" }],
+  } });
+  assert.equal(response.statusCode, 200);
+  assert.match(receivedInput, /profileset\."LocalCraft Candidate 1"/);
+  assert.equal(response.json().result.candidates[0].difference, 15);
+  await app.close();
+});

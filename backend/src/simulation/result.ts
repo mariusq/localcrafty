@@ -1,4 +1,4 @@
-import type { DamageBreakdownEntry, QuickSimResult } from "@localcraft/shared";
+import type { DamageBreakdownEntry, GearCompareResult, GearItem, QuickSimResult } from "@localcraft/shared";
 import type { RawSimulationResult } from "./docker-engine.js";
 
 type JsonRecord = Record<string, unknown>;
@@ -22,6 +22,11 @@ function firstPlayer(raw: RawSimulationResult): JsonRecord {
     throw new Error("SimulationCraft JSON did not include a player result.");
   }
   return players[0] as JsonRecord;
+}
+
+function players(raw: RawSimulationResult): JsonRecord[] {
+  const simulation = record(raw.sim) ?? raw;
+  return Array.isArray(simulation.players) ? simulation.players.flatMap((player) => record(player) ? [player] : []) : [];
 }
 
 function resultNumber(container: JsonRecord | undefined, key: string): number | undefined {
@@ -70,5 +75,47 @@ export function parseQuickSimResult(raw: RawSimulationResult): QuickSimResult {
     dpsError: resultNumber(collectedData, "dps_error") ?? resultNumber(collectedData, "dps_error_pct"),
     durationSeconds: duration,
     damageBreakdown: damageBreakdown(player),
+  };
+}
+
+function playerDps(player: JsonRecord): { dps: number; dpsError?: number } {
+  const collectedData = record(player.collected_data);
+  const dps = resultNumber(collectedData, "dps");
+  if (dps === undefined) throw new Error("SimulationCraft JSON did not include DPS for a comparison profile.");
+  const dpsError = resultNumber(collectedData, "dps_error") ?? resultNumber(collectedData, "dps_error_pct");
+  return { dps, ...(dpsError === undefined ? {} : { dpsError }) };
+}
+
+function profilesetDps(raw: RawSimulationResult, candidates: GearItem[]): Array<{ dps: number; dpsError?: number }> | undefined {
+  const simulation = record(raw.sim) ?? raw;
+  const profilesets = record(simulation.profilesets);
+  const results = Array.isArray(profilesets?.results) ? profilesets.results.flatMap((entry) => record(entry) ? [entry] : []) : [];
+  if (!results.length) return undefined;
+
+  return candidates.map((_, index) => {
+    const expectedName = `LocalCraft Candidate ${index + 1}`;
+    const entry = results.find((result) => text(result.name) === expectedName);
+    const dps = resultNumber(entry, "mean");
+    if (dps === undefined) throw new Error(`SimulationCraft did not return DPS for ${expectedName}.`);
+    const dpsError = resultNumber(entry, "mean_stddev") ?? resultNumber(entry, "stddev");
+    return { dps, ...(dpsError === undefined ? {} : { dpsError }) };
+  });
+}
+
+/** Maps the source player and ordered LocalCraft profilesets into a compact comparison response. */
+export function parseGearCompareResult(raw: RawSimulationResult, baselineItem: GearItem, candidates: GearItem[]): GearCompareResult {
+  const baseline = playerDps(firstPlayer(raw));
+  // Profilesets do not add simulated clones to sim.players. json2 places their
+  // compact metric summaries in sim.profilesets.results instead.
+  const profilesetResults = profilesetDps(raw, candidates);
+  const candidateResults = profilesetResults ?? players(raw).slice(1).map(playerDps);
+  if (candidateResults.length < candidates.length) throw new Error("SimulationCraft did not return results for every comparison profile.");
+  return {
+    baseline: { item: baselineItem, ...baseline },
+    candidates: candidates.map((item, index) => {
+      const result = candidateResults[index];
+      const difference = result.dps - baseline.dps;
+      return { item, ...result, difference, percentageDifference: baseline.dps ? difference / baseline.dps * 100 : 0 };
+    }).sort((left, right) => right.dps - left.dps),
   };
 }

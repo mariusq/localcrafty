@@ -64,3 +64,23 @@ export interface QuickSimRequest {
   simcText: string;
   settings?: Partial<SimulationSettings>;
 }
+
+export interface GearCompareRequest {
+  simcText: string;
+  slot: EquipmentSlot;
+  candidateItems: GearItem[];
+  settings?: Partial<SimulationSettings>;
+}
+
+export interface GearComparisonEntry {
+  item: GearItem;
+  dps: number;
+  dpsError?: number;
+  difference: number;
+  percentageDifference: number;
+}
+
+export interface GearCompareResult {
+  baseline: { item: GearItem; dps: number; dpsError?: number };
+  candidates: GearComparisonEntry[];
+}
