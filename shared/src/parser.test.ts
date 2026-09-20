@@ -16,3 +16,21 @@ test("keeps commented alternate gear as bag items", () => {
   assert.equal(profile.bagItems.length, 1);
   assert.equal(profile.bagItems[0].name, "alternate helm");
 });
+
+test("uses the addon's preceding comment for compact item names and levels", () => {
+  const profile = parseSimcProfile(`warlock=Test_Lock
+# Crown of Arcane Acuity (723)
+head=,id=271546,bonus_id=123
+# Vile Vial of Volatile Venom (308)
+# trinket1=,id=273796,bonus_id=456`);
+
+  assert.deepEqual(profile.equippedGear[0], {
+    slot: "head",
+    itemId: 271546,
+    itemLevel: 723,
+    name: "Crown of Arcane Acuity",
+    rawDefinition: "head=,id=271546,bonus_id=123",
+  });
+  assert.equal(profile.bagItems[0].name, "Vile Vial of Volatile Venom");
+  assert.equal(profile.bagItems[0].itemLevel, 308);
+});
