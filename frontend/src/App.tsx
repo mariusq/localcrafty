@@ -1,13 +1,16 @@
 import { useEffect, useState } from "react";
-import { EQUIPMENT_SLOTS, type GearItem, type ParsedProfile, type SimulationSettings } from "@localcraft/shared";
+import { EQUIPMENT_SLOTS, SIMULATION_FIGHT_STYLES, type GearItem, type ParsedProfile, type QuickSimResult, type SimulationSettings } from "@localcraft/shared";
 
 const profileStorageKey = "localcraft.simc-profile";
 const labels: Record<string, string> = {
   main_hand: "Main Hand", off_hand: "Off Hand", finger1: "Finger 1", finger2: "Finger 2",
   trinket1: "Trinket 1", trinket2: "Trinket 2",
+  HecticAddCleave: "Hectic Add Cleave", LightMovement: "Light Movement", HeavyMovement: "Heavy Movement",
+  DungeonSlice: "Dungeon Slice",
 };
 const title = (value: string) => labels[value] ?? value.replace(/_/g, " ").replace(/\b\w/g, (letter) => letter.toUpperCase());
 const itemName = (item: GearItem) => item.name ?? `Item ${item.itemId ?? "unknown"}`;
+const formatNumber = new Intl.NumberFormat("en-US", { maximumFractionDigits: 0 });
 
 export default function App() {
   const [simcText, setSimcText] = useState(() => localStorage.getItem(profileStorageKey) ?? "");
@@ -18,6 +21,7 @@ export default function App() {
   const [simulationError, setSimulationError] = useState<string>();
   const [technicalDetails, setTechnicalDetails] = useState<string>();
   const [rawResult, setRawResult] = useState<Record<string, unknown>>();
+  const [quickSimResult, setQuickSimResult] = useState<QuickSimResult>();
   const [settings, setSettings] = useState<SimulationSettings>({ iterations: 10_000, fightStyle: "Patchwerk", desiredTargets: 1, maxTime: 300 });
 
   useEffect(() => { localStorage.setItem(profileStorageKey, simcText); }, [simcText]);
@@ -34,7 +38,7 @@ export default function App() {
   }
 
   async function runQuickSim() {
-    setSimulating(true); setSimulationError(undefined); setTechnicalDetails(undefined); setRawResult(undefined);
+    setSimulating(true); setSimulationError(undefined); setTechnicalDetails(undefined); setRawResult(undefined); setQuickSimResult(undefined);
     try {
       const response = await fetch("/api/sim/quick", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ simcText, settings }) });
       const data = await response.json();
@@ -42,6 +46,7 @@ export default function App() {
         setTechnicalDetails(data.technicalDetails);
         throw new Error(data.error ?? "Could not run the simulation.");
       }
+      setQuickSimResult(data.result);
       setRawResult(data.rawResult);
     } catch (cause) { setSimulationError(cause instanceof Error ? cause.message : "Could not contact the LocalCraft API."); }
     finally { setSimulating(false); }
@@ -55,11 +60,12 @@ export default function App() {
       {error && <p className="error">{error}</p>}
     </section>
     <section className="card simulation-card"><div className="section-title"><div><p className="eyebrow">QUICK SIM</p><h2>Simulation settings</h2></div><span>Docker-backed</span></div>
-      <div className="settings-grid"><label>Iterations<input type="number" min="1" value={settings.iterations} onChange={(event) => setSettings({ ...settings, iterations: Number(event.target.value) })} /></label><label>Fight style<input value={settings.fightStyle} onChange={(event) => setSettings({ ...settings, fightStyle: event.target.value })} /></label><label>Targets<input type="number" min="1" value={settings.desiredTargets} onChange={(event) => setSettings({ ...settings, desiredTargets: Number(event.target.value) })} /></label><label>Max time (seconds)<input type="number" min="1" value={settings.maxTime} onChange={(event) => setSettings({ ...settings, maxTime: Number(event.target.value) })} /></label></div>
+      <div className="settings-grid"><label>Iterations<input type="number" min="1" value={settings.iterations} onChange={(event) => setSettings({ ...settings, iterations: Number(event.target.value) })} /></label><label>Simulation method<select value={settings.fightStyle} onChange={(event) => setSettings({ ...settings, fightStyle: event.target.value })}>{SIMULATION_FIGHT_STYLES.map((style) => <option key={style} value={style}>{title(style)}</option>)}</select></label><label>Targets<input type="number" min="1" value={settings.desiredTargets} onChange={(event) => setSettings({ ...settings, desiredTargets: Number(event.target.value) })} /></label><label>Max time (seconds)<input type="number" min="1" value={settings.maxTime} onChange={(event) => setSettings({ ...settings, maxTime: Number(event.target.value) })} /></label></div>
       <div className="actions"><span>Uses {settings.iterations.toLocaleString()} iterations with the local SimulationCraft image.</span><button onClick={runQuickSim} disabled={simulating || !simcText.trim()}>{simulating ? "Running simulation…" : "Run Quick Sim"}</button></div>
       {simulationError && <p className="error">{simulationError}</p>}
       {technicalDetails && <details className="details"><summary>Technical details</summary><pre>{technicalDetails}</pre></details>}
-      {rawResult && <details className="details" open><summary>Simulation completed — raw result</summary><pre>{JSON.stringify(rawResult, null, 2)}</pre><p>Clean DPS and damage-breakdown cards arrive in Phase 4.</p></details>}
+      {quickSimResult && <section className="quick-result" aria-live="polite"><div className="result-summary"><p className="eyebrow">TOTAL DPS</p><strong>{formatNumber.format(quickSimResult.dps)}</strong><span>DPS{quickSimResult.dpsError !== undefined && ` ± ${formatNumber.format(quickSimResult.dpsError)}`}</span><p>{[quickSimResult.characterName, quickSimResult.specialization, quickSimResult.durationSeconds && `${quickSimResult.durationSeconds.toFixed(0)} sec simulation`].filter(Boolean).join(" · ")}</p></div><div className="damage-card"><div className="section-title"><div><p className="eyebrow">DAMAGE</p><h2>Damage breakdown</h2></div><span>{quickSimResult.damageBreakdown.length} abilities</span></div>{quickSimResult.damageBreakdown.length ? <div className="damage-list">{quickSimResult.damageBreakdown.map((entry) => <article key={entry.name}><div><strong>{entry.name}</strong><span>{formatNumber.format(entry.damage)} damage</span></div><b>{entry.percentage.toFixed(1)}%</b><i><em style={{ width: `${Math.min(entry.percentage, 100)}%` }} /></i></article>)}</div> : <p className="empty">SimulationCraft did not provide an ability-level damage breakdown.</p>}</div></section>}
+      {rawResult && <details className="details"><summary>Raw result (debugging)</summary><pre>{JSON.stringify(rawResult, null, 2)}</pre></details>}
     </section>
     {profile && <section className="results">
       <div className="card character"><p className="eyebrow">CHARACTER</p><h2>{profile.characterName ?? "Character not detected"}</h2><p>{[profile.specialization && title(profile.specialization), profile.characterClass && title(profile.characterClass)].filter(Boolean).join(" · ") || "Class and specialization not found"}</p>{profile.talents && <code>Talents: {profile.talents}</code>}</div>

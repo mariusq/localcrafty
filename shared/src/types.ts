@@ -33,6 +33,33 @@ export interface SimulationSettings {
   maxTime?: number;
 }
 
+export const SIMULATION_FIGHT_STYLES = [
+  "Patchwerk",
+  "HecticAddCleave",
+  "LightMovement",
+  "HeavyMovement",
+  "Beastlord",
+  "DungeonSlice",
+  "Ultraxion",
+] as const;
+
+export type SimulationFightStyle = (typeof SIMULATION_FIGHT_STYLES)[number];
+
+export interface DamageBreakdownEntry {
+  name: string;
+  damage: number;
+  percentage: number;
+}
+
+export interface QuickSimResult {
+  characterName?: string;
+  specialization?: string;
+  dps: number;
+  dpsError?: number;
+  durationSeconds?: number;
+  damageBreakdown: DamageBreakdownEntry[];
+}
+
 export interface QuickSimRequest {
   simcText: string;
   settings?: Partial<SimulationSettings>;

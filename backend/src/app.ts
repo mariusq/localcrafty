@@ -3,6 +3,7 @@ import Fastify from "fastify";
 import { parseSimcProfile, type ParseProfileRequest, type QuickSimRequest } from "@localcraft/shared";
 import { DockerSimulationEngine, SimulationEngineError, type SimulationEngine } from "./simulation/docker-engine.js";
 import { createQuickSimInput, normalizeSimulationSettings } from "./simulation/input.js";
+import { parseQuickSimResult } from "./simulation/result.js";
 
 export function buildApp(engine: SimulationEngine = new DockerSimulationEngine()) {
   const app = Fastify({ logger: true });
@@ -25,7 +26,7 @@ export function buildApp(engine: SimulationEngine = new DockerSimulationEngine()
     try {
       const settings = normalizeSimulationSettings(request.body.settings);
       const rawResult = await engine.run(createQuickSimInput(request.body.simcText, settings));
-      return { settings, rawResult };
+      return { settings, result: parseQuickSimResult(rawResult), rawResult };
     } catch (error) {
       const message = error instanceof SimulationEngineError
         ? error.message

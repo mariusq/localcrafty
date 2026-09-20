@@ -12,7 +12,7 @@ test("health endpoint responds", async () => {
 
 test("quick sim sends generated SimC input to the simulation engine", async () => {
   let receivedInput = "";
-  const app = buildApp({ run: async (input) => { receivedInput = input; return { simulationcraft: { version: "test" } }; } });
+  const app = buildApp({ run: async (input) => { receivedInput = input; return { sim: { players: [{ collected_data: { dps: { mean: 100 } } }] } }; } });
   const response = await app.inject({
     method: "POST",
     url: "/api/sim/quick",
@@ -22,6 +22,6 @@ test("quick sim sends generated SimC input to the simulation engine", async () =
   assert.equal(response.statusCode, 200);
   assert.match(receivedInput, /mage=Khadgar/);
   assert.match(receivedInput, /iterations=250/);
-  assert.deepEqual(response.json().rawResult, { simulationcraft: { version: "test" } });
+  assert.equal(response.json().result.dps, 100);
   await app.close();
 });

@@ -1,6 +1,6 @@
 # LocalCraft
 
-LocalCraft is a small, local web interface for SimulationCraft. It can parse a pasted profile and run a Docker-backed Quick Sim. Clean DPS and damage result cards are the next increment; the current Quick Sim exposes its raw `json2` result in an expandable details area.
+LocalCraft is a small, local web interface for SimulationCraft. It can parse a pasted profile and run a Docker-backed Quick Sim, presenting total DPS, the available error margin, and an ability damage breakdown. The full `json2` document remains available in an expandable debugging section.
 
 ## Prerequisites
 
@@ -34,7 +34,7 @@ Bag-item conventions vary by addon/export version. The initial parser recognizes
 
 ## Next steps
 
-The remaining work is parsing `json2` into clean Quick Sim result cards and gear comparison profilesets.
+Gear comparison profilesets are the next major feature.
 
 ## Checks
 
